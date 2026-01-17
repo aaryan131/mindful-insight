@@ -1,0 +1,4 @@
+project_id = "amhumnccowhcgrpsufmd"
+
+[functions.analyze-stress]
+verify_jwt = false
