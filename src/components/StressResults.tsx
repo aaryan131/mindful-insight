@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import { Heart, Lightbulb, RefreshCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MLAnalysisDetails } from "@/components/MLAnalysisDetails";
+import { ClassificationResult } from "@/lib/stressClassifier";
 
 interface StressAnalysis {
   level: "Low" | "Moderate" | "High" | "Severe";
@@ -8,6 +10,7 @@ interface StressAnalysis {
   recommendations: string[];
   affirmation: string;
   score: number;
+  mlResult: ClassificationResult;
 }
 
 interface StressResultsProps {
@@ -137,6 +140,9 @@ export const StressResults = ({ analysis, onRetake }: StressResultsProps) => {
           "{analysis.affirmation}"
         </p>
       </motion.div>
+
+      {/* ML Analysis Details */}
+      <MLAnalysisDetails result={analysis.mlResult} />
 
       {/* Retake Button */}
       <motion.div

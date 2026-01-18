@@ -6,7 +6,13 @@ import { StressQuestion } from "@/components/StressQuestion";
 import { StressResults } from "@/components/StressResults";
 import { LoadingAnalysis } from "@/components/LoadingAnalysis";
 import { stressQuestions } from "@/data/stressQuestions";
-import { useToast } from "@/hooks/use-toast";
+import { 
+  classifyStress, 
+  generateRecommendations, 
+  generateSummary, 
+  generateAffirmation,
+  ClassificationResult 
+} from "@/lib/stressClassifier";
 
 interface StressAnalysis {
   level: "Low" | "Moderate" | "High" | "Severe";
@@ -14,6 +20,7 @@ interface StressAnalysis {
   recommendations: string[];
   affirmation: string;
   score: number;
+  mlResult: ClassificationResult;
 }
 
 type AppState = "welcome" | "assessment" | "loading" | "results";
@@ -23,7 +30,6 @@ const Index = () => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [analysis, setAnalysis] = useState<StressAnalysis | null>(null);
-  const { toast } = useToast();
 
   const handleStartAssessment = () => {
     setAppState("assessment");
@@ -49,47 +55,30 @@ const Index = () => {
     }
   };
 
-  const submitAssessment = async () => {
+  const submitAssessment = () => {
     setAppState("loading");
 
-    const responses = stressQuestions.map((q, index) => ({
-      question: q.question,
-      answer: answers[index] || 3,
-    }));
+    // Extract scores from answers
+    const scores = stressQuestions.map((_, index) => answers[index] || 3);
 
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-stress`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ responses }),
-        }
-      );
+    // Simulate ML processing time for realistic UX
+    setTimeout(() => {
+      // Run ML classification
+      const mlResult = classifyStress(scores);
+      
+      // Generate analysis from ML results
+      const analysisResult: StressAnalysis = {
+        level: mlResult.level,
+        summary: generateSummary(mlResult),
+        recommendations: generateRecommendations(mlResult),
+        affirmation: generateAffirmation(mlResult.level),
+        score: (mlResult.features.totalScore / (stressQuestions.length * 5)) * 100,
+        mlResult: mlResult,
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to analyze responses");
-      }
-
-      const data = await response.json();
-      setAnalysis(data);
+      setAnalysis(analysisResult);
       setAppState("results");
-    } catch (error) {
-      console.error("Error:", error);
-      toast({
-        title: "Analysis Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Something went wrong. Please try again.",
-        variant: "destructive",
-      });
-      setAppState("assessment");
-    }
+    }, 1500); // Brief delay for UX
   };
 
   const handleRetake = () => {
@@ -166,9 +155,9 @@ const Index = () => {
                 transition={{ delay: 0.3 }}
                 className="text-lg text-muted-foreground max-w-md mb-8 text-balance"
               >
-                Take a quick assessment powered by AI to understand your stress
-                levels and receive personalized recommendations for better mental
-                wellness.
+                Take a quick assessment powered by Machine Learning to understand 
+                your stress levels and receive personalized recommendations for 
+                better mental wellness.
               </motion.p>
 
               <motion.div
@@ -194,7 +183,7 @@ const Index = () => {
                 className="mt-12 flex items-center gap-2 text-sm text-muted-foreground"
               >
                 <Sparkles className="w-4 h-4 text-primary" />
-                <span>10 questions • 3 minutes • AI-powered insights</span>
+                <span>10 questions • 3 minutes • ML-powered insights</span>
               </motion.div>
             </motion.div>
           )}

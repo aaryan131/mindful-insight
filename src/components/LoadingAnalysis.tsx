@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Brain } from "lucide-react";
+import { Brain, GitBranch, BarChart3 } from "lucide-react";
 
 export const LoadingAnalysis = () => {
   return (
@@ -30,7 +30,7 @@ export const LoadingAnalysis = () => {
         transition={{ delay: 0.3 }}
         className="mt-8 text-xl font-display font-semibold text-foreground"
       >
-        Analyzing Your Responses
+        Running ML Classification
       </motion.h3>
 
       <motion.p
@@ -39,8 +39,39 @@ export const LoadingAnalysis = () => {
         transition={{ delay: 0.5 }}
         className="mt-2 text-muted-foreground text-center max-w-xs"
       >
-        Our AI is carefully reviewing your answers to provide personalized insights...
+        Our Random Forest algorithm is analyzing your responses...
       </motion.p>
+
+      {/* ML Process Steps */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="mt-6 space-y-2"
+      >
+        {[
+          { icon: GitBranch, text: "Extracting features" },
+          { icon: Brain, text: "Running decision trees" },
+          { icon: BarChart3, text: "Computing probabilities" },
+        ].map((step, i) => (
+          <motion.div
+            key={i}
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.8 + i * 0.2 }}
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <step.icon className="w-4 h-4 text-primary" />
+            <span>{step.text}</span>
+            <motion.span
+              animate={{ opacity: [0, 1, 0] }}
+              transition={{ duration: 1, repeat: Infinity, delay: i * 0.3 }}
+            >
+              ...
+            </motion.span>
+          </motion.div>
+        ))}
+      </motion.div>
 
       <div className="mt-6 flex gap-2">
         {[0, 1, 2].map((i) => (
