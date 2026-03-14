@@ -15,7 +15,7 @@ import {
 } from "@/lib/stressClassifier";
 
 interface StressAnalysis {
-  level: "Low" | "Moderate" | "High" | "Severe";
+  level: "Low" | "Mild" | "Moderate" | "High" | "Very High";
   summary: string;
   recommendations: string[];
   affirmation: string;
