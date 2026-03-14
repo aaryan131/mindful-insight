@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Brain, ArrowRight, ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,21 +6,19 @@ import { StressQuestion } from "@/components/StressQuestion";
 import { StressResults } from "@/components/StressResults";
 import { LoadingAnalysis } from "@/components/LoadingAnalysis";
 import { stressQuestions } from "@/data/stressQuestions";
-import { 
-  classifyStress, 
-  generateRecommendations, 
-  generateSummary, 
-  generateAffirmation,
-  ClassificationResult 
-} from "@/lib/stressClassifier";
+import { trainPipeline, predictFromAnswers, TrainingResult } from "@/ml/train";
+import { PredictionResponse } from "@/ml/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-interface StressAnalysis {
-  level: "Low" | "Mild" | "Moderate" | "High" | "Very High";
+export interface StressAnalysis {
+  level: "Low" | "Medium" | "High";
   summary: string;
   recommendations: string[];
   affirmation: string;
   score: number;
-  mlResult: ClassificationResult;
+  prediction: PredictionResponse;
+  trainingResult: TrainingResult;
 }
 
 type AppState = "welcome" | "assessment" | "loading" | "results";
@@ -30,6 +28,15 @@ const Index = () => {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [analysis, setAnalysis] = useState<StressAnalysis | null>(null);
+  const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
+  const { toast } = useToast();
+
+  // Train ML models on mount
+  useEffect(() => {
+    const result = trainPipeline();
+    setTrainingResult(result);
+    console.log(`ML Pipeline trained. Best model: ${result.bestModel.name} (accuracy: ${(result.bestModel.metrics.accuracy * 100).toFixed(1)}%)`);
+  }, []);
 
   const handleStartAssessment = () => {
     setAppState("assessment");
@@ -55,34 +62,52 @@ const Index = () => {
     }
   };
 
-  const submitAssessment = () => {
+  const submitAssessment = async () => {
     setAppState("loading");
-
-    // Extract scores from answers
     const scores = stressQuestions.map((_, index) => answers[index] || 3);
 
-    // Simulate ML processing time for realistic UX
-    setTimeout(() => {
-      // Run ML classification
-      const mlResult = classifyStress(scores);
-      
-      // Generate analysis from ML results
-      // Compute score from average of mapped features normalized
-      const avgHR = mlResult.features.hr;
-      const scorePercent = Math.min(100, Math.max(0, ((avgHR - 60) / 45) * 100));
-      
-      const analysisResult: StressAnalysis = {
-        level: mlResult.level,
-        summary: generateSummary(mlResult),
-        recommendations: generateRecommendations(mlResult),
-        affirmation: generateAffirmation(mlResult.level),
-        score: scorePercent,
-        mlResult: mlResult,
-      };
+    // Try Edge Function first, fall back to local ML
+    let prediction: PredictionResponse | null = null;
 
-      setAnalysis(analysisResult);
-      setAppState("results");
-    }, 1500); // Brief delay for UX
+    try {
+      const { data, error } = await supabase.functions.invoke('predict-stress', {
+        body: { answers: scores },
+      });
+
+      if (!error && data && data.stress_level) {
+        prediction = data as PredictionResponse;
+      }
+    } catch (e) {
+      console.warn("Edge function unavailable, using local ML:", e);
+    }
+
+    // Fallback to local ML if edge function fails
+    if (!prediction && trainingResult) {
+      prediction = predictFromAnswers(scores, trainingResult);
+    }
+
+    if (!prediction) {
+      toast({ title: "Error", description: "Failed to get prediction. Please try again.", variant: "destructive" });
+      setAppState("assessment");
+      return;
+    }
+
+    // Generate recommendations based on stress level
+    const recommendations = generateRecommendations(prediction.stress_level, prediction.contributing_factors);
+    const summary = generateSummary(prediction);
+    const affirmation = generateAffirmation(prediction.stress_level);
+    const scorePercent = prediction.confidence * 100;
+
+    setAnalysis({
+      level: prediction.stress_level,
+      summary,
+      recommendations,
+      affirmation,
+      score: scorePercent,
+      prediction,
+      trainingResult: trainingResult!,
+    });
+    setAppState("results");
   };
 
   const handleRetake = () => {
@@ -94,7 +119,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen gradient-serene">
-      {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="container max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -102,7 +126,7 @@ const Index = () => {
               <Brain className="w-5 h-5 text-white" />
             </div>
             <span className="font-display font-semibold text-foreground">
-              MindCheck
+              MindCheck ML
             </span>
           </div>
           {appState === "assessment" && (
@@ -113,10 +137,8 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container max-w-4xl mx-auto px-4 pt-24 pb-12">
         <AnimatePresence mode="wait">
-          {/* Welcome Screen */}
           {appState === "welcome" && (
             <motion.div
               key="welcome"
@@ -147,9 +169,9 @@ const Index = () => {
                 transition={{ delay: 0.2 }}
                 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4"
               >
-                Mental Stress
+                ML Stress
                 <span className="block gradient-calm bg-clip-text text-transparent">
-                  Detector
+                  Predictor
                 </span>
               </motion.h1>
 
@@ -157,18 +179,27 @@ const Index = () => {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.3 }}
-                className="text-lg text-muted-foreground max-w-md mb-8 text-balance"
+                className="text-lg text-muted-foreground max-w-md mb-4 text-balance"
               >
-                Take a quick assessment powered by Machine Learning to understand 
-                your stress levels and receive personalized recommendations for 
-                better mental wellness.
+                Powered by Gaussian Naive Bayes, Logistic Regression &amp; Random Forest
+                classifiers trained on real stress survey data.
               </motion.p>
+
+              {trainingResult && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.35 }}
+                  className="mb-8 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                >
+                  Best model: {trainingResult.bestModel.name} — {(trainingResult.bestModel.metrics.accuracy * 100).toFixed(0)}% accuracy
+                </motion.div>
+              )}
 
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
-                className="flex flex-col sm:flex-row gap-4"
               >
                 <Button
                   onClick={handleStartAssessment}
@@ -187,12 +218,11 @@ const Index = () => {
                 className="mt-12 flex items-center gap-2 text-sm text-muted-foreground"
               >
                 <Sparkles className="w-4 h-4 text-primary" />
-                <span>10 questions • 3 minutes • ML-powered insights</span>
+                <span>10 questions • 3 models • Real ML classification</span>
               </motion.div>
             </motion.div>
           )}
 
-          {/* Assessment Screen */}
           {appState === "assessment" && (
             <motion.div
               key="assessment"
@@ -246,7 +276,6 @@ const Index = () => {
             </motion.div>
           )}
 
-          {/* Loading Screen */}
           {appState === "loading" && (
             <motion.div
               key="loading"
@@ -259,7 +288,6 @@ const Index = () => {
             </motion.div>
           )}
 
-          {/* Results Screen */}
           {appState === "results" && analysis && (
             <motion.div
               key="results"
@@ -276,5 +304,60 @@ const Index = () => {
     </div>
   );
 };
+
+// ─── Helper functions ──────────────────────────────────────────────────
+
+function generateRecommendations(level: string, factors: PredictionResponse['contributing_factors']): string[] {
+  const recs: string[] = [];
+  const base: Record<string, string[]> = {
+    Low: [
+      "Maintain your current healthy habits — they're working well",
+      "Continue regular physical activity and good sleep hygiene",
+      "Consider sharing your wellness strategies with others",
+    ],
+    Medium: [
+      "Schedule regular breaks throughout your day to decompress",
+      "Practice mindfulness or deep breathing for 10 minutes daily",
+      "Aim for 7-8 hours of sleep on a consistent schedule",
+    ],
+    High: [
+      "Please consider speaking with a mental health professional",
+      "Practice progressive muscle relaxation before bedtime",
+      "Reduce screen time and set boundaries at work/school",
+    ],
+  };
+  recs.push(...(base[level] || base.Medium));
+
+  // Add factor-specific recommendations
+  const highFactors = factors.filter(f => f.impact === 'High');
+  for (const factor of highFactors.slice(0, 2)) {
+    if (factor.feature === 'Sleep Quality') recs.push('Prioritize sleep: avoid screens 1 hour before bed');
+    if (factor.feature === 'Work Pressure') recs.push('Break large tasks into smaller, manageable steps');
+    if (factor.feature === 'Emotional Instability') recs.push('Try journaling to process your emotions');
+    if (factor.feature === 'Fatigue') recs.push('Take short walks during breaks to restore energy');
+  }
+
+  return recs.slice(0, 5);
+}
+
+function generateSummary(prediction: PredictionResponse): string {
+  const pct = (prediction.confidence * 100).toFixed(0);
+  const summaries: Record<string, string> = {
+    Low: `Our ${prediction.model_used} classifier predicted Low stress with ${pct}% confidence. Your responses indicate healthy coping mechanisms and well-balanced lifestyle factors.`,
+    Medium: `The ${prediction.model_used} model detected Medium stress levels with ${pct}% confidence. Some lifestyle factors suggest room for improvement in managing daily pressures.`,
+    High: `Classification result: High stress at ${pct}% confidence using ${prediction.model_used}. Multiple contributing factors indicate significant stress — professional support is recommended.`,
+  };
+  return summaries[prediction.stress_level] || summaries.Medium;
+}
+
+function generateAffirmation(level: string): string {
+  const affirmations: Record<string, string[]> = {
+    Low: ["You have excellent resilience — keep nurturing your well-being.", "Your balanced approach to life is truly admirable."],
+    Medium: ["Every step toward managing stress is a victory worth celebrating.", "You deserve rest, peace, and time to recharge."],
+    High: ["Seeking help is a sign of courage, not weakness.", "Every moment is a new opportunity to begin your healing journey."],
+  };
+  const opts = affirmations[level] || affirmations.Medium;
+  return opts[Math.floor(Math.random() * opts.length)];
+}
 
 export default Index;
