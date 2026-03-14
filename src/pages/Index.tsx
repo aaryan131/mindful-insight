@@ -67,12 +67,16 @@ const Index = () => {
       const mlResult = classifyStress(scores);
       
       // Generate analysis from ML results
+      // Compute score from average of mapped features normalized
+      const avgHR = mlResult.features.hr;
+      const scorePercent = Math.min(100, Math.max(0, ((avgHR - 60) / 45) * 100));
+      
       const analysisResult: StressAnalysis = {
         level: mlResult.level,
         summary: generateSummary(mlResult),
         recommendations: generateRecommendations(mlResult),
         affirmation: generateAffirmation(mlResult.level),
-        score: (mlResult.features.totalScore / (stressQuestions.length * 5)) * 100,
+        score: scorePercent,
         mlResult: mlResult,
       };
 

@@ -25,6 +25,12 @@ const levelColors = {
     ring: "ring-emerald-500/30",
     icon: "bg-emerald-500",
   },
+  Mild: {
+    bg: "from-sky-500/20 to-cyan-500/20",
+    text: "text-sky-600",
+    ring: "ring-sky-500/30",
+    icon: "bg-sky-500",
+  },
   Moderate: {
     bg: "from-amber-500/20 to-yellow-500/20",
     text: "text-amber-600",
@@ -37,7 +43,7 @@ const levelColors = {
     ring: "ring-orange-500/30",
     icon: "bg-orange-500",
   },
-  Severe: {
+  "Very High": {
     bg: "from-red-500/20 to-rose-500/20",
     text: "text-red-600",
     ring: "ring-red-500/30",
