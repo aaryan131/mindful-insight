@@ -2,16 +2,8 @@ import { motion } from "framer-motion";
 import { Heart, Lightbulb, RefreshCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MLAnalysisDetails } from "@/components/MLAnalysisDetails";
-import { ClassificationResult } from "@/lib/stressClassifier";
-
-interface StressAnalysis {
-  level: "Low" | "Mild" | "Moderate" | "High" | "Very High";
-  summary: string;
-  recommendations: string[];
-  affirmation: string;
-  score: number;
-  mlResult: ClassificationResult;
-}
+import { MLDashboard } from "@/components/MLDashboard";
+import type { StressAnalysis } from "@/pages/Index";
 
 interface StressResultsProps {
   analysis: StressAnalysis;
@@ -25,25 +17,13 @@ const levelColors = {
     ring: "ring-emerald-500/30",
     icon: "bg-emerald-500",
   },
-  Mild: {
-    bg: "from-sky-500/20 to-cyan-500/20",
-    text: "text-sky-600",
-    ring: "ring-sky-500/30",
-    icon: "bg-sky-500",
-  },
-  Moderate: {
+  Medium: {
     bg: "from-amber-500/20 to-yellow-500/20",
     text: "text-amber-600",
     ring: "ring-amber-500/30",
     icon: "bg-amber-500",
   },
   High: {
-    bg: "from-orange-500/20 to-red-400/20",
-    text: "text-orange-600",
-    ring: "ring-orange-500/30",
-    icon: "bg-orange-500",
-  },
-  "Very High": {
     bg: "from-red-500/20 to-rose-500/20",
     text: "text-red-600",
     ring: "ring-red-500/30",
@@ -53,7 +33,7 @@ const levelColors = {
 
 export const StressResults = ({ analysis, onRetake }: StressResultsProps) => {
   const colors = levelColors[analysis.level];
-  const scorePercentage = Math.round(analysis.score);
+  const confidencePct = Math.round(analysis.prediction.confidence * 100);
 
   return (
     <motion.div
@@ -78,20 +58,53 @@ export const StressResults = ({ analysis, onRetake }: StressResultsProps) => {
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Your Stress Level
+              ML Prediction Result
             </span>
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${colors.icon} text-white`}>
-              {scorePercentage}% stress score
+              {confidencePct}% confidence
             </span>
           </div>
 
-          <h2 className={`text-4xl md:text-5xl font-display font-bold ${colors.text} mb-4`}>
-            {analysis.level}
+          <h2 className={`text-4xl md:text-5xl font-display font-bold ${colors.text} mb-2`}>
+            {analysis.level} Stress
           </h2>
+
+          <p className="text-xs text-muted-foreground mb-4">
+            Model: {analysis.prediction.model_used}
+          </p>
 
           <p className="text-foreground/80 text-base md:text-lg leading-relaxed">
             {analysis.summary}
           </p>
+        </div>
+      </motion.div>
+
+      {/* Contributing Factors */}
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.15 }}
+        className="bg-card rounded-2xl p-6 shadow-card border border-border"
+      >
+        <h3 className="text-lg font-display font-semibold text-foreground mb-4">
+          Contributing Factors
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          {analysis.prediction.contributing_factors.map((factor, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between p-3 rounded-xl bg-secondary/50"
+            >
+              <span className="text-sm text-foreground">{factor.feature}</span>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                factor.impact === 'High' ? 'bg-destructive/20 text-destructive' :
+                factor.impact === 'Moderate' ? 'bg-amber-500/20 text-amber-600' :
+                'bg-emerald-500/20 text-emerald-600'
+              }`}>
+                {factor.impact}
+              </span>
+            </div>
+          ))}
         </div>
       </motion.div>
 
@@ -148,7 +161,10 @@ export const StressResults = ({ analysis, onRetake }: StressResultsProps) => {
       </motion.div>
 
       {/* ML Analysis Details */}
-      <MLAnalysisDetails result={analysis.mlResult} />
+      <MLAnalysisDetails prediction={analysis.prediction} />
+
+      {/* ML Dashboard */}
+      <MLDashboard trainingResult={analysis.trainingResult} />
 
       {/* Retake Button */}
       <motion.div
