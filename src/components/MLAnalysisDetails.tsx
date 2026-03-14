@@ -1,21 +1,24 @@
 import { motion } from "framer-motion";
-import { Brain, BarChart3, GitBranch, Target } from "lucide-react";
+import { Brain, BarChart3, Database, Target, Activity } from "lucide-react";
 import { ClassificationResult, StressLevel } from "@/lib/stressClassifier";
+import { FEATURE_NAMES } from "@/lib/dataset";
 
 interface MLAnalysisDetailsProps {
   result: ClassificationResult;
 }
 
-const levelColors: Record<StressLevel, { bg: string; text: string; bar: string }> = {
-  Low: { bg: "bg-accent/20", text: "text-accent-foreground", bar: "bg-accent" },
-  Moderate: { bg: "bg-primary/20", text: "text-primary", bar: "bg-primary" },
-  High: { bg: "bg-orange-100", text: "text-orange-700", bar: "bg-orange-500" },
-  Severe: { bg: "bg-destructive/20", text: "text-destructive", bar: "bg-destructive" },
+const levelColors: Record<StressLevel, { bar: string }> = {
+  Low: { bar: "bg-emerald-500" },
+  Mild: { bar: "bg-accent" },
+  Moderate: { bar: "bg-primary" },
+  High: { bar: "bg-orange-500" },
+  "Very High": { bar: "bg-destructive" },
 };
 
 export const MLAnalysisDetails = ({ result }: MLAnalysisDetailsProps) => {
-  const { features, probabilities, confidence } = result;
-  
+  const { features, probabilities, confidence, nearestNeighbors } = result;
+  const featureKeys = Object.keys(FEATURE_NAMES) as (keyof typeof FEATURE_NAMES)[];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -25,14 +28,22 @@ export const MLAnalysisDetails = ({ result }: MLAnalysisDetailsProps) => {
     >
       <div className="flex items-center gap-2 mb-4">
         <Brain className="w-5 h-5 text-primary" />
-        <h3 className="font-semibold text-foreground">Machine Learning Analysis</h3>
+        <h3 className="font-semibold text-foreground">Gaussian Naive Bayes Analysis</h3>
       </div>
-      
+
+      {/* Dataset Info */}
+      <div className="mb-4 p-3 bg-muted/50 rounded-lg flex items-center gap-2">
+        <Database className="w-4 h-4 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">
+          Trained on SaYoPillow dataset (Kaggle) • {nearestNeighbors} matching class samples • 8 physiological features
+        </span>
+      </div>
+
       {/* Classification Probabilities */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-3">
           <BarChart3 className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Classification Probabilities</span>
+          <span className="text-sm font-medium text-muted-foreground">Class Probabilities</span>
         </div>
         <div className="space-y-2">
           {(Object.keys(probabilities) as StressLevel[]).map((level) => (
@@ -43,17 +54,17 @@ export const MLAnalysisDetails = ({ result }: MLAnalysisDetailsProps) => {
                   initial={{ width: 0 }}
                   animate={{ width: `${probabilities[level] * 100}%` }}
                   transition={{ duration: 0.5, delay: 0.1 }}
-                  className={levelColors[level].bar}
+                  className={`h-full ${levelColors[level].bar}`}
                 />
               </div>
               <span className="w-12 text-sm text-right text-muted-foreground">
-                {(probabilities[level] * 100).toFixed(0)}%
+                {(probabilities[level] * 100).toFixed(1)}%
               </span>
             </div>
           ))}
         </div>
       </div>
-      
+
       {/* Model Confidence */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
@@ -69,30 +80,31 @@ export const MLAnalysisDetails = ({ result }: MLAnalysisDetailsProps) => {
               className="h-full bg-gradient-to-r from-primary to-accent"
             />
           </div>
-          <span className="font-semibold text-foreground">{(confidence * 100).toFixed(0)}%</span>
+          <span className="font-semibold text-foreground">{(confidence * 100).toFixed(1)}%</span>
         </div>
       </div>
-      
-      {/* Feature Extraction */}
+
+      {/* Mapped Physiological Features */}
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <GitBranch className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Extracted Features</span>
+          <Activity className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">Estimated Physiological Features</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <FeatureCard label="Total Score" value={features.totalScore.toString()} />
-          <FeatureCard label="Average" value={features.averageScore.toFixed(2)} />
-          <FeatureCard label="Variance" value={features.variance.toFixed(2)} />
-          <FeatureCard label="Emotional" value={features.emotionalScore.toString()} />
-          <FeatureCard label="Physical" value={features.physicalScore.toString()} />
-          <FeatureCard label="Cognitive" value={features.cognitiveScore.toString()} />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {featureKeys.map((key) => (
+            <FeatureCard
+              key={key}
+              label={FEATURE_NAMES[key]}
+              value={features[key as keyof typeof features]?.toFixed(1) ?? '-'}
+            />
+          ))}
         </div>
       </div>
-      
+
       {/* Algorithm Info */}
       <div className="mt-4 pt-4 border-t border-border/50">
         <p className="text-xs text-muted-foreground text-center">
-          Classification performed using Random Forest algorithm with 5 decision trees
+          Gaussian Naive Bayes classifier trained on SaYoPillow dataset (Kaggle) • 65 training samples • 5 stress classes
         </p>
       </div>
     </motion.div>
@@ -102,6 +114,6 @@ export const MLAnalysisDetails = ({ result }: MLAnalysisDetailsProps) => {
 const FeatureCard = ({ label, value }: { label: string; value: string }) => (
   <div className="p-3 bg-muted/50 rounded-lg text-center">
     <div className="text-lg font-semibold text-foreground">{value}</div>
-    <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="text-xs text-muted-foreground leading-tight">{label}</div>
   </div>
 );
